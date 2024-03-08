@@ -26,7 +26,17 @@
       ];
     };
 
-    # packages."${system}".default = pkgs.hello;
+    packages."${system}".default =
+      pkgs.rustPlatform.buildRustPackage {
+        name = "mqtt-light";
+        src = pkgs.lib.cleanSource ./.;
+        cargoLock = {
+          lockFile = ./Cargo.lock;
+          # Allow dependencies to be fetched from git and avoid having to set the outputHashes manually
+          allowBuiltinFetchGit = true;
+        };
+        doCheck = false;
+      };
 
   };
 }

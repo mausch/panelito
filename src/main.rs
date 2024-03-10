@@ -4,6 +4,7 @@ use std::{fmt::Display, fs::File, io::Write};
 use anyhow::{Context, Result, Ok, bail, anyhow};
 use framebuffer::Framebuffer;
 use rumqttc::{MqttOptions, QoS, Client};
+use ddc_hi::{Ddc, DdcHost, Display as DdcDisplay};
 
 
 struct Percentage(u8);
@@ -37,7 +38,47 @@ impl<'de> Deserialize<'de> for Percentage {
     }
 }
 
-fn set_brightness(percentage: Percentage) -> Result<()> {
+#[repr(u8)]
+enum DdcCommand {
+    Brightness = 0x10,
+    Power = 0xD6,
+}
+
+#[repr(u16)]
+#[derive(Clone)]
+enum DdcPower {
+    On = 1,
+    Off = 5,
+}
+
+fn set_ddc_power(power: DdcPower, mut displays: Vec<DdcDisplay>) -> Result<Vec<DdcDisplay>> {
+    for display in displays.iter_mut() {
+        let model = display.info.model_name.clone().unwrap_or(String::from("UNKNOWN"));
+        display.handle.set_vcp_feature(DdcCommand::Power as u8, power.clone() as u16)
+        .with_context(|| format!("Could not set DDC power for {model}"))?;
+        display.handle.sleep();
+    }
+    Ok(displays)
+}
+
+fn set_brightness<'a>(percentage: &Percentage, displays: Vec<DdcDisplay>) -> Result<Vec<DdcDisplay>> {
+    let displays1 = set_ddc_brightness(&percentage, displays)?;
+    set_backlight_brightness(&percentage)?;
+    Ok(displays1)
+}
+
+fn set_ddc_brightness<'a>(percentage: &Percentage, mut displays: Vec<DdcDisplay>) -> Result<Vec<DdcDisplay>> {
+    for display in displays.iter_mut() {
+        let model = display.info.model_name.clone().unwrap_or(String::from("UNKNOWN"));
+        display.handle.set_vcp_feature(DdcCommand::Brightness as u8, percentage.0.into())
+            .with_context(|| format!("Could not set DDC brightness for {model}"))?;
+        display.handle.sleep();
+    }
+    Ok(displays)
+}
+
+fn set_backlight_brightness(percentage: &Percentage) -> Result<()> {
+    // TODO iterate on /sys/class/backlight/*
     println!("Setting brightness to {percentage}");
     let max_brightness_raw = std::fs::read_to_string("/sys/class/backlight/intel_backlight/max_brightness")
         .with_context(|| "Could not read max brightness")?;
@@ -197,17 +238,23 @@ fn calculate_new_state(set_state: &StateSet, state: &State) -> State {
     }
 }
 
-fn apply_state(state: &State) -> Result<()> {
+fn apply_state(state: &State, displays: Vec<DdcDisplay>) -> Result<Vec<DdcDisplay>> {
     let state_json = serde_json::to_string(state)?;
     println!("Applying state {state_json}");
+
     match state.state {
-        OnOff::Off => set_brightness(Percentage(0)),
+        OnOff::Off => {
+            let displays1 = set_brightness(&Percentage(0), displays)?;
+            let displays2 = set_ddc_power(DdcPower::Off, displays1)?;
+            Ok(displays2)
+        },
         OnOff::On => {
+            let displays1 = set_ddc_power(DdcPower::On, displays)?;
             let v = (f32::from(u8::try_from(state.brightness)?) / f32::from(u8::MAX) * 100.0) as u8;
-            set_brightness(Percentage::new(v)?)?;
+            let displays2 = set_brightness(&Percentage::new(v)?, displays1)?;
             let kelvin = 1_000_000 / state.color_temp; // color_temp comes as mireds
             set_color(color_temperature_to_rgb(kelvin))?;
-            Ok(())
+            Ok(displays2)
         }
     }
 }
@@ -248,10 +295,7 @@ fn put_discovery(client: &mut Client, id: &String, get_topic: &String, set_topic
 
 fn mqtt(id: i64, mqtt: MqttBroker) -> Result<()> {
     let mqttoptions = MqttOptions::new("test", mqtt.host, mqtt.port);
-    //mqttoptions.set_keep_alive(Duration::from_secs(5));
 
-
-    // 0xec1bbdfffeb1847f
     let id_str = format!("0x{:016x}", id);
     println!("id: {id_str}");
 
@@ -296,6 +340,7 @@ fn mqtt(id: i64, mqtt: MqttBroker) -> Result<()> {
         loaded_state: false,
     };
 
+
     conn.iter().try_fold(initial_state, |state, notification| {
         let event = notification.with_context(|| "Connection error")?;
         let new_state = match event {
@@ -339,7 +384,7 @@ fn mqtt(id: i64, mqtt: MqttBroker) -> Result<()> {
             let new_state_msg = serde_json::to_string(&new_state.state)?;
             client.publish(&state_topic, QoS::AtMostOnce, true, new_state_msg.clone())?;
             client.publish(&get_topic, QoS::AtMostOnce, false, new_state_msg.clone())?;
-            apply_state(&new_state.state)
+            apply_state(&new_state.state, get_ddc_displays())
                 .with_context(|| "Could not apply state")?;
         }
         Ok(new_state)
@@ -377,6 +422,14 @@ fn parse_cmdline() -> CmdLine {
 
     return parsed_args;
 
+}
+
+fn get_ddc_displays() -> Vec<DdcDisplay> {
+    let mut displays = DdcDisplay::enumerate();
+    println!("Got {} total DDC displays", displays.len());
+    displays.retain_mut(|f| f.update_capabilities().is_ok());
+    println!("Got {} good DDC displays", displays.len());
+    displays
 }
 
 fn main() -> Result<()> {

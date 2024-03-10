@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # ddc-hi.url = "github:arcnmx/ddc-hi-rs";
   };
 
   outputs = { self, nixpkgs }: 
@@ -15,6 +16,11 @@
         pkgs.mosquitto
         pkgs.rustc
         pkgs.cargo
+
+        # for ddc-hi
+        pkgs.udev
+        pkgs.pkg-config
+        # ddc-hi.lib.crate
         
         (pkgs.vscode-with-extensions.override {
           vscode = pkgs.vscodium;

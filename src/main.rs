@@ -293,11 +293,11 @@ fn put_discovery(client: &mut Client, id: &String, get_topic: &String, set_topic
 }
 
 
-fn mqtt(id: i64, mqtt: MqttBroker) -> Result<()> {
+fn mqtt(entity_id: i64, mqtt: MqttBroker) -> Result<()> {
     let mqttoptions = MqttOptions::new("test", mqtt.host, mqtt.port);
 
-    let id_str = format!("0x{:016x}", id);
-    println!("id: {id_str}");
+    let id_str = format!("0x{:016x}", entity_id);
+    println!("Entity id: {id_str}");
 
     let (mut client, mut conn) = Client::new(mqttoptions, 10);
 
@@ -393,12 +393,12 @@ fn mqtt(id: i64, mqtt: MqttBroker) -> Result<()> {
 
 #[derive(Clone, Debug)]
 struct CmdLine {
-    id: i64,
+    entity_id: i64,
     broker: MqttBroker,
 }
 
 fn parse_cmdline() -> CmdLine {
-    let id = bpaf::long("id")
+    let entity_id = bpaf::long("entity-id")
         .help("Entity ID e.g. '0xec1bbdfffeb1847f'")
         .argument::<String>("ID")
         .parse(|id| {
@@ -418,7 +418,7 @@ fn parse_cmdline() -> CmdLine {
 
     let broker = construct!(MqttBroker { host, port });
 
-    let parsed_args = construct!(CmdLine {id, broker}).to_options().run();
+    let parsed_args = construct!(CmdLine {entity_id, broker}).to_options().run();
 
     return parsed_args;
 
@@ -434,6 +434,6 @@ fn get_ddc_displays() -> Vec<DdcDisplay> {
 
 fn main() -> Result<()> {
     let parsed_args = parse_cmdline();
-    mqtt(parsed_args.id, parsed_args.broker)?;
+    mqtt(parsed_args.entity_id, parsed_args.broker)?;
     Ok(())
 }

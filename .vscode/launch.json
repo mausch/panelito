@@ -11,7 +11,7 @@
             "name": "Debug",
             "program": "${workspaceFolder}/target/debug/mqtt-light",
             "args": [
-                "--id=123123",
+                "--entity-id=123123",
                 "--mqtt-host=192.168.1.190"
                 // "--mqtt-host=localhost"
             ],

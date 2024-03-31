@@ -276,7 +276,7 @@ fn put_discovery(client: &mut Client, id: &String, get_topic: &String, set_topic
         effect_list: vec![],
         json_attributes_topic: get_topic.clone(),
         max_mireds: 500,
-        min_mireds: 155, // can't be zero apparently, triggers a div-by-zero exception in home-assistant
+        min_mireds: MIN_MIREDS.into(), // can't be zero apparently, triggers a div-by-zero exception in home-assistant
         name: Some(id.clone()),
         object_id: id.clone(),
         schema: String::from("json"),
@@ -292,6 +292,7 @@ fn put_discovery(client: &mut Client, id: &String, get_topic: &String, set_topic
     Ok(())
 }
 
+const MIN_MIREDS: u8 = 155;
 
 fn mqtt(entity_id: u64, mqtt: MqttBroker) -> Result<()> {
     let mqttoptions = MqttOptions::new("test", mqtt.host, mqtt.port);
@@ -314,7 +315,7 @@ fn mqtt(entity_id: u64, mqtt: MqttBroker) -> Result<()> {
     let state = State {
         brightness: 0,
         color_mode: String::from("color_temp"),
-        color_temp: 0,
+        color_temp: MIN_MIREDS.into(),
         linkquality:  255,
         state: OnOff::On,
         update_available: false,
@@ -332,7 +333,7 @@ fn mqtt(entity_id: u64, mqtt: MqttBroker) -> Result<()> {
         state: State {
             brightness: u32::MAX,
             color_mode: String::from("color_temp"),
-            color_temp: 0,
+            color_temp: MIN_MIREDS.into(),
             linkquality: 255,
             state: OnOff::Off,
             update_available: false,

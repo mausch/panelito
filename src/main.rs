@@ -79,7 +79,7 @@ fn set_ddc_brightness<'a>(percentage: &Percentage, mut displays: Vec<DdcDisplay>
 
 fn set_backlight_brightness(percentage: &Percentage) -> Result<()> {
     // TODO iterate on /sys/class/backlight/*
-    println!("Setting brightness to {percentage}");
+    log::info!("Setting brightness to {percentage}");
     let max_brightness_raw = std::fs::read_to_string("/sys/class/backlight/intel_backlight/max_brightness")
         .with_context(|| "Could not read max brightness")?;
 
@@ -139,7 +139,7 @@ fn color_temperature_to_rgb(kelvin: u32) -> RGB {
 
 fn set_color(rgb: RGB) -> Result<()> {
     let rgb_json = serde_json::to_string(&rgb)?;
-    println!("Setting {rgb_json}");
+    log::info!("Setting {rgb_json}");
     let fbdevice = "/dev/fb0";
     let mut framebuffer = Framebuffer::new(fbdevice)
         .with_context(|| format!("Could not open framebuffer {fbdevice}"))?;
@@ -240,7 +240,7 @@ fn calculate_new_state(set_state: &StateSet, state: &State) -> State {
 
 fn apply_state(state: &State, displays: Vec<DdcDisplay>) -> Result<Vec<DdcDisplay>> {
     let state_json = serde_json::to_string(state)?;
-    println!("Applying state {state_json}");
+    log::debug!("Applying state {state_json}");
 
     match state.state {
         OnOff::Off => {
@@ -287,7 +287,7 @@ fn put_discovery(client: &mut Client, id: &String, get_topic: &String, set_topic
 
     let id_clone = id.clone();
     let payload = serde_json::to_string(&discovery)?;
-    println!("Publishing discovery: {payload}");
+    log::info!("Publishing discovery: {payload}");
     client.publish(format!("homeassistant/light/{id_clone}/light/config"), QoS::AtLeastOnce, true, payload)?;
     Ok(())
 }
@@ -298,7 +298,7 @@ fn mqtt(entity_id: u64, mqtt: MqttBroker) -> Result<()> {
     let mqttoptions = MqttOptions::new("test", mqtt.host, mqtt.port);
 
     let id_str = format!("0x{:016x}", entity_id);
-    println!("Entity id: {id_str}");
+    log::info!("Entity id: {id_str}");
 
     let (mut client, mut conn) = Client::new(mqttoptions, 10);
 
@@ -346,19 +346,18 @@ fn mqtt(entity_id: u64, mqtt: MqttBroker) -> Result<()> {
         let event = notification.with_context(|| "Connection error")?;
         let new_state = match event {
             rumqttc::Event::Incoming(m) => {
-                println!("Incoming: {:?}", m);
+                log::debug!("Incoming: {:?}", m);
                 match m {
                     rumqttc::Packet::Publish(p) => {
-                        //println!("Incoming publish: {:?}", p);
                         let payload = String::from_utf8(p.payload.to_vec())
                             .with_context(|| "Error reading payload")?;
                         if p.topic == get_topic {
-                            println!("Incoming get topic: {:?}", p);
+                            log::debug!("Incoming get topic: {:?}", p);
                             Ok(state.clone())
                         } else if p.topic == set_topic {
                             let state_set =  serde_json::from_str::<StateSet>(&payload)
                                 .with_context(|| format!("Error deserializing StateSet from {payload}"))?;
-                            println!("Incoming set topic: {:?}", state_set);
+                            log::debug!("Incoming set topic: {:?}", state_set);
                             let new_state = calculate_new_state(&state_set, &state.state);
                             Ok(LoopState { state: new_state, loaded_state: state.loaded_state })
                         } else if p.topic == state_topic {
@@ -377,7 +376,7 @@ fn mqtt(entity_id: u64, mqtt: MqttBroker) -> Result<()> {
                 }
             },
             rumqttc::Event::Outgoing(m) => {
-                println!("Outgoing: {:?}", m);
+                log::debug!("Outgoing: {:?}", m);
                 Ok(state.clone())
             }
         }?;
@@ -437,13 +436,14 @@ fn parse_cmdline() -> CmdLine {
 
 fn get_ddc_displays() -> Vec<DdcDisplay> {
     let mut displays = DdcDisplay::enumerate();
-    println!("Got {} total DDC displays", displays.len());
+    log::info!("Got {} total DDC displays", displays.len());
     displays.retain_mut(|f| f.update_capabilities().is_ok());
-    println!("Got {} good DDC displays", displays.len());
+    log::info!("Got {} good DDC displays", displays.len());
     displays
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
     let parsed_args = parse_cmdline();
     mqtt(parsed_args.entity_id, parsed_args.broker)?;
     Ok(())

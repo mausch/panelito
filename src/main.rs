@@ -293,7 +293,7 @@ fn put_discovery(client: &mut Client, id: &String, get_topic: &String, set_topic
 }
 
 
-fn mqtt(entity_id: i64, mqtt: MqttBroker) -> Result<()> {
+fn mqtt(entity_id: u64, mqtt: MqttBroker) -> Result<()> {
     let mqttoptions = MqttOptions::new("test", mqtt.host, mqtt.port);
 
     let id_str = format!("0x{:016x}", entity_id);
@@ -393,17 +393,27 @@ fn mqtt(entity_id: i64, mqtt: MqttBroker) -> Result<()> {
 
 #[derive(Clone, Debug)]
 struct CmdLine {
-    entity_id: i64,
+    entity_id: u64,
     broker: MqttBroker,
 }
 
 fn parse_cmdline() -> CmdLine {
     let entity_id = bpaf::long("entity-id")
-        .help("Entity ID e.g. '0xec1bbdfffeb1847f'")
+        .help("Entity ID e.g. '0xec1bbdfffeb1847f'. If not defined /etc/machine-id will be used if available.")
         .argument::<String>("ID")
         .parse(|id| {
             let id_hex = id.trim_start_matches("0x");
-            return i64::from_str_radix(id_hex, 16);
+            return u64::from_str_radix(id_hex, 16);
+        })
+        .fallback_with(|| {
+            let machine_id = std::fs::read_to_string("/etc/machine-id")
+                .with_context(|| "Could not read /etc/machine-id . Use --entity-id to pass entity ID explicitly.")?;
+            let byte_slice: [u8; 16] = machine_id.as_bytes()[0..16].try_into()
+                .with_context(|| format!("Error reading /etc/machine-id content: {machine_id}"))?;
+            let str_slice = std::str::from_utf8(&byte_slice)?;
+            let value = u64::from_str_radix(str_slice, 16)
+                .with_context(|| format!("Could not parse value from /etc/machine-id: {str_slice}"))?;
+            Ok(value)
         });
 
     let host = bpaf::long("mqtt-host")

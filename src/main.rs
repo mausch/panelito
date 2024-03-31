@@ -6,7 +6,6 @@ use framebuffer::Framebuffer;
 use rumqttc::{MqttOptions, QoS, Client};
 use ddc_hi::{Ddc, DdcHost, Display as DdcDisplay};
 
-
 struct Percentage(u8);
 
 impl Percentage {
@@ -63,7 +62,7 @@ fn set_ddc_power(power: DdcPower, mut displays: Vec<DdcDisplay>) -> Result<Vec<D
 
 fn set_brightness<'a>(percentage: &Percentage, displays: Vec<DdcDisplay>) -> Result<Vec<DdcDisplay>> {
     let displays1 = set_ddc_brightness(&percentage, displays)?;
-    set_backlight_brightness(&percentage)?;
+    let _ = set_backlight_brightness(&percentage);
     Ok(displays1)
 }
 

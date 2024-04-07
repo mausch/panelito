@@ -1,6 +1,6 @@
 use bpaf::{Parser, construct};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, fs::File, io::Write};
+use std::{fmt::{Debug, Display}, fs::File, io::Write};
 use anyhow::{Context, Result, Ok, bail, anyhow};
 use framebuffer::Framebuffer;
 use rumqttc::{MqttOptions, QoS, Client};
@@ -143,15 +143,49 @@ fn set_color(rgb: RGB) -> Result<()> {
     let mut framebuffer = Framebuffer::new(fbdevice)
         .with_context(|| format!("Could not open framebuffer {fbdevice}"))?;
 
-    let color: [u8; 4] = [rgb.blue, rgb.green, rgb.red, 0x00];
     let width = framebuffer.var_screen_info.xres;
     let height = framebuffer.var_screen_info.yres;
     let width_height: usize = (width * height).try_into()?;
 
-    let screen_buffer: Vec<u8> = std::iter::repeat(color)
-        .take(width_height)
-        .flatten()
-        .collect();
+    log::debug!("fb info: {:?}", framebuffer.var_screen_info.clone());
+
+    let blue = rgb.blue >> (8-framebuffer.var_screen_info.blue.length);
+    let red = rgb.red >> (8-framebuffer.var_screen_info.red.length);
+    let green = rgb.green >> (8-framebuffer.var_screen_info.green.length);
+
+    let color = 
+        ((red as u32) << framebuffer.var_screen_info.red.offset) | 
+        ((green as u32) << framebuffer.var_screen_info.green.offset) | 
+        ((blue as u32) << framebuffer.var_screen_info.blue.offset);
+
+    let color_width_height = std::iter::repeat(color).take(width_height);        
+
+    let screen_buffer: Vec<u8> = 
+        match framebuffer.var_screen_info.bits_per_pixel {
+            16 => {
+                let buffer = 
+                    color_width_height.flat_map(|x| [
+                        (x & 0xFF) as u8, 
+                        ((x & 0xFF00) >> 8) as u8,
+                    ])
+                    .collect();
+
+                Ok(buffer)
+            }
+            32 => {
+                let buffer = 
+                    color_width_height.flat_map(|x| [
+                        (x & 0xFF) as u8, 
+                        ((x & 0xFF00) >> 8) as u8,
+                        ((x & 0xFF0000) >> 16) as u8,
+                        ((x & 0xFF000000) >> 24) as u8,
+                    ])
+                    .collect();
+
+                Ok(buffer)
+            }
+            x => Err(anyhow!("Unsupported framebuffer bpp {x}"))
+        }?;
 
     framebuffer.write_frame(&screen_buffer);
 

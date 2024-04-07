@@ -16,7 +16,8 @@
                 // "--mqtt-host=localhost"
             ],
             "env": {
-                "RUST_LOG": "debug"
+                "RUST_LOG": "debug",
+                "RUST_BACKTRACE": "1"
             },
             "cwd": "${workspaceRoot}",
             "sourceLanguages": [

@@ -60,8 +60,8 @@
     RuntimeMaxFileSize = 10M
   '';
 
-  systemd.services.mqtt-light = 
-    let script = pkgs.writers.makeScriptWriter { interpreter = "${pkgs.nushell}/bin/nu"; } "mqtt-light-start" ''
+  systemd.services.panelito = 
+    let script = pkgs.writers.makeScriptWriter { interpreter = "${pkgs.nushell}/bin/nu"; } "panelito-start" ''
       let gateway = ${pkgs.iproute}/bin/ip route get 8.8.8.8 
         | lines 
         | get 0 
@@ -83,11 +83,11 @@
         | where $it != $gateway
         | get 0
 
-      ${pkgs.mqtt-light}/bin/mqtt-light --mqtt-host $mqtt_host
+      ${pkgs.panelito}/bin/panelito --mqtt-host $mqtt_host
     '';
     in
   {
-    description = "MQTT light";
+    description = "panelito";
     wantedBy = [ "multi-user.target" ];
     wants = [ "network-online.target" ];
     after = [ "network-online.target" ];
@@ -126,7 +126,7 @@
     };
 
   networking = {
-    hostName = "rpi3-mqtt-light";
+    hostName = "rpi3-panelito";
   };
 
 

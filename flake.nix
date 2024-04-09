@@ -17,8 +17,8 @@
           pkgs.pkg-config
       ];
 
-      build-mqtt-light = system: pkgs: pkgs.rustPlatform.buildRustPackage {
-        name = "mqtt-light";
+      build-panelito = system: pkgs: pkgs.rustPlatform.buildRustPackage {
+        name = "panelito";
         src = crane.lib.${system}.cleanCargoSource ./.;
         buildInputs = deps pkgs;
         nativeBuildInputs = deps pkgs;
@@ -56,7 +56,7 @@
           };
 
           packages = { 
-            default = build-mqtt-light system pkgs;
+            default = build-panelito system pkgs;
 
             rpi3-sdcard = 
               nixos-generators.nixosGenerate {
@@ -64,7 +64,7 @@
                 format = "sd-aarch64";
                 specialArgs = {
                   pkgs = nixpkgs.legacyPackages."aarch64-linux" // {
-                    mqtt-light = build-mqtt-light "aarch64-linux" nixpkgs.legacyPackages."aarch64-linux";
+                    panelito = build-panelito "aarch64-linux" nixpkgs.legacyPackages."aarch64-linux";
                   };
                 };
                 modules = [
